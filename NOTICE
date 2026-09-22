@@ -1,0 +1,23 @@
+nginx-log-analyzer
+==================
+
+Copyright (c) 2026 JustinYi922
+Email:  635344900@qq.com
+GitHub: https://github.com/JustinYi922/nginx-log-analyzer
+
+This project is released under the MIT License (see LICENSE).
+
+Commercial use
+--------------
+
+Commercial use (including embedding in products, SaaS, internal enterprise
+tools, or paid delivery) is allowed, provided that:
+
+1. You retain the author attribution: GitHub
+   https://github.com/JustinYi922/nginx-log-analyzer and email
+   635344900@qq.com in LICENSE / NOTICE / About / docs of your
+   distribution or derivative work.
+2. You notify the author once by email at 635344900@qq.com before or when
+   commercial use begins (company/product name + short description).
+
+Do not remove this NOTICE file from redistributions of the source.

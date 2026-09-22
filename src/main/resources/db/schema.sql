@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS nginx_access_log (
+    id                      BIGINT       NOT NULL AUTO_INCREMENT,
+    remote_addr             VARCHAR(64)  NOT NULL,
+    remote_user             VARCHAR(64)  NULL,
+    access_time             DATETIME     NULL,
+    method                  VARCHAR(16)  NULL,
+    path                    VARCHAR(1024) NULL,
+    protocol                VARCHAR(16)  NULL,
+    status                  INT          NULL,
+    body_bytes              BIGINT       NULL,
+    referer                 VARCHAR(1024) NULL,
+    user_agent              VARCHAR(512) NULL,
+    x_forwarded_for         VARCHAR(256) NULL,
+    upstream_addr           VARCHAR(256) NULL,
+    upstream_response_time  DECIMAL(14, 3) NULL,
+    PRIMARY KEY (id),
+    KEY idx_access_time (access_time),
+    KEY idx_status (status),
+    KEY idx_method (method),
+    KEY idx_remote_addr (remote_addr),
+    KEY idx_path (path(191)),
+    KEY idx_upstream (upstream_addr(64))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -1,0 +1,32 @@
+# Build
+target/
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & local runtime / secrets
+*.log
+.nginx-log-analyzer/
+uploads/
+reports/
+
+# Maven / Eclipse leftovers
+.classpath
+.project
+.settings/
+dependency-reduced-pom.xml

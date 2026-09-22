@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nginx 访问日志看板</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #9aa7b8;
+      --accent: #3d8bfd;
+      --ok: #3dd68c;
+      --warn: #f5a524;
+      --bad: #f31260;
+      --line: #2a3648;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1c2b44, transparent), var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 20px 28px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0; font-size: 22px; font-weight: 650; }
+    .sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    input[type=text], input[type=datetime-local] {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    input[type=text]#filePath { width: min(420px, 55vw); }
+    input[type=text]#ipFilter { width: min(360px, 50vw); }
+    input[type=datetime-local] { width: 210px; color-scheme: dark; }
+    .filter-bar {
+      margin: 12px 28px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+    .filter-bar label { color: var(--muted); font-size: 13px; }
+    button {
+      background: var(--accent);
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary { background: #2d3b50; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    button.danger { background: var(--bad); }
+    button.icon-btn {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: 10px;
+      background: #2d3b50;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+    }
+    button.icon-btn:hover { background: #3a4d68; }
+    .chk {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .upload-bar {
+      margin: 10px 28px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+    .upload-bar label { color: var(--muted); font-size: 13px; }
+    input[type=file] {
+      color: var(--muted);
+      max-width: min(420px, 60vw);
+    }
+    .modal-mask {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-mask.open { display: flex; }
+    .modal {
+      width: min(560px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 18px 16px;
+      box-shadow: 0 16px 48px rgba(0,0,0,.45);
+    }
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .modal-head h3 { margin: 0; font-size: 16px; font-weight: 650; }
+    .modal-close {
+      background: transparent;
+      color: var(--muted);
+      font-size: 20px;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+    .modal-close:hover { background: #243044; color: var(--text); }
+    .db-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 12px;
+      align-items: end;
+    }
+    .db-grid label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .db-grid label.full { grid-column: 1 / -1; }
+    .db-grid input {
+      background: #121821;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .db-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+      align-items: center;
+    }
+    #dbHint { color: var(--muted); font-size: 12px; word-break: break-all; }
+    main { padding: 12px 28px 40px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin: 12px 0 18px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .card .label { color: var(--muted); font-size: 12px; }
+    .card .value { font-size: 22px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px 18px;
+      min-height: 320px;
+    }
+    .panel h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+    .progress {
+      margin: 10px 28px 0;
+      background: #121821;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: none;
+    }
+    .progress.show { display: block; }
+    .bar {
+      height: 8px;
+      background: #243044;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .bar > i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), #69b1ff);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 6px 4px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 500; }
+    td.path { max-width: 360px; word-break: break-all; }
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .tag.platform { background: rgba(61,214,140,.18); color: var(--ok); }
+    .tag.other { background: rgba(154,167,184,.15); color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Nginx 访问日志看板</h1>
+      <div class="sub">Spring Boot + MySQL · 支持本地上传日志分析</div>
+      <div class="sub" style="margin-top:4px">Author: <a href="https://github.com/JustinYi922/nginx-log-analyzer" style="color:var(--accent)">JustinYi922</a> · 635344900@qq.com · MIT（商用请保留署名并邮件告知）</div>
+    </div>
+    <div class="actions">
+      <button id="btnRefresh" class="secondary">刷新统计</button>
+      <button id="btnClearData" class="danger">一键清空数据</button>
+      <button id="btnOpenDbSettings" class="icon-btn" title="MySQL 设置" aria-label="MySQL 设置">⚙</button>
+    </div>
+  </header>
+
+  <div class="upload-bar">
+    <label>选择本地日志</label>
+    <input id="fileUpload" type="file" accept=".log,.txt,text/plain,*/*" />
+    <label class="chk"><input id="chkTruncate" type="checkbox" checked /> 导入前先清空旧数据</label>
+    <button id="btnUpload">上传并分析</button>
+    <span class="muted">也可填绝对路径：</span>
+    <input id="filePath" type="text" placeholder="可选：服务器本地绝对路径" />
+    <button id="btnImport" class="secondary">按路径导入</button>
+  </div>
+
+  <div id="dbModal" class="modal-mask" role="dialog" aria-modal="true" aria-labelledby="dbModalTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="dbModalTitle">MySQL 连接设置</h3>
+        <button type="button" id="btnCloseDbSettings" class="modal-close" title="关闭">×</button>
+      </div>
+      <div class="db-grid">
+        <label>Host<input id="dbHost" type="text" placeholder="localhost" /></label>
+        <label>Port<input id="dbPort" type="text" placeholder="3306" /></label>
+        <label>Database<input id="dbName" type="text" placeholder="nginx_log" /></label>
+        <label>Username<input id="dbUser" type="text" placeholder="user" /></label>
+        <label class="full">Password<input id="dbPass" type="password" placeholder="留空则保持原密码" autocomplete="off" /></label>
+      </div>
+      <div class="db-actions">
+        <button id="btnDbTest" class="secondary">测试连接</button>
+        <button id="btnDbApply">保存并切换</button>
+        <span id="dbHint"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="progressBox" class="progress">
+    <div id="progressText" class="muted">待命</div>
+    <div class="bar"><i id="progressBar"></i></div>
+  </div>
+
+  <div class="filter-bar">
+    <label>开始时间</label>
+    <input id="startTime" type="datetime-local" step="1" />
+    <label>结束时间</label>
+    <input id="endTime" type="datetime-local" step="1" />
+    <label>来源 IP</label>
+    <input id="ipFilter" type="text" placeholder="多个 IP，逗号/空格分隔" />
+    <button id="btnFilter">应用筛选</button>
+    <button id="btnClearFilter" class="secondary">清除筛选</button>
+    <span id="filterHint" class="muted">默认：最近一周</span>
+  </div>
+
+  <main>
+    <div class="cards" id="cards"></div>
+    <div class="grid">
+      <div class="panel"><h2>状态码占比</h2><canvas id="chartStatus"></canvas></div>
+      <div class="panel"><h2>来源归属</h2><canvas id="chartOwner"></canvas></div>
+      <div class="panel"><h2>HTTP 方法占比</h2><canvas id="chartMethod"></canvas></div>
+      <div class="panel"><h2>按天访问量</h2><canvas id="chartDay"></canvas></div>
+      <div class="panel"><h2>按小时访问量</h2><canvas id="chartHour"></canvas></div>
+      <div class="panel"><h2>Top 路径</h2><div id="tablePaths"></div></div>
+      <div class="panel"><h2>Top 来源 IP（含归属标记）</h2><div id="tableIps"></div></div>
+      <div class="panel"><h2>Top User-Agent</h2><div id="tableUa"></div></div>
+      <div class="panel"><h2>Top Upstream</h2><div id="tableUp"></div></div>
+    </div>
+  </main>
+
+  <script>
+    const charts = {};
+    let pollTimer = null;
+
+    function fmtNum(n) {
+      if (n == null) return '-';
+      return Number(n).toLocaleString('zh-CN');
+    }
+    function fmtBytes(n) {
+      n = Number(n || 0);
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+      return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    }
+
+    function renderCards(ov) {
+      const items = [
+        { label: '总请求', value: fmtNum(ov.total) },
+        { label: '已标记网段', value: fmtNum(ov.labeledCount != null ? ov.labeledCount : ov.platformCount) + ' (' + (ov.labeledRate != null ? ov.labeledRate : ov.platformRate || 0) + '%)', cls: 'ok' },
+        { label: '其他来源', value: fmtNum(ov.otherCount) },
+        { label: '2xx 占比', value: (ov.okRate || 0) + '%', cls: 'ok' },
+        { label: '4xx 占比', value: (ov.err4xxRate || 0) + '%', cls: 'warn' },
+        { label: '5xx 占比', value: (ov.err5xxRate || 0) + '%', cls: 'bad' },
+        { label: '流量合计', value: fmtBytes(ov.totalBytes) },
+        { label: '上游平均耗时(s)', value: ov.avgUpstreamSec == null ? '-' : Number(ov.avgUpstreamSec).toFixed(3) },
+        { label: '最早时间', value: ov.minTime || '-' },
+        { label: '最晚时间', value: ov.maxTime || '-' },
+      ];
+      document.getElementById('cards').innerHTML = items.map(i =>
+        `<div class="card"><div class="label">${i.label}</div><div class="value ${i.cls||''}">${i.value}</div></div>`
+      ).join('');
+    }
+
+    function doughnut(id, rows) {
+      const labels = rows.map(r => String(r.name));
+      const data = rows.map(r => Number(r.cnt));
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(document.getElementById(id), {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data }] },
+        options: {
+          plugins: { legend: { position: 'bottom', labels: { color: '#c9d4e3', boxWidth: 12 } } },
+          maintainAspectRatio: false
+        }
+      });
+      document.getElementById(id).parentElement.style.height = '340px';
+    }
+
+    function line(id, rows) {
+      const labels = rows.map(r => String(r.name));
+      const data = rows.map(r => Number(r.cnt));
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(document.getElementById(id), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: '请求数',
+            data,
+            borderColor: '#3d8bfd',
+            backgroundColor: 'rgba(61,139,253,.15)',
+            tension: .25,
+            fill: true,
+            pointRadius: 0
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#9aa7b8', maxTicksLimit: 10 }, grid: { color: '#243044' } },
+            y: { ticks: { color: '#9aa7b8' }, grid: { color: '#243044' } }
+          },
+          maintainAspectRatio: false
+        }
+      });
+      document.getElementById(id).parentElement.style.height = '340px';
+    }
+
+    function table(elId, rows, withIpLabel) {
+      const head = withIpLabel
+        ? '<table><thead><tr><th>#</th><th>值</th><th>归属</th><th>次数</th><th>占比</th></tr></thead><tbody>'
+        : '<table><thead><tr><th>#</th><th>值</th><th>次数</th><th>占比</th></tr></thead><tbody>';
+      const body = rows.map((r, i) => {
+        if (withIpLabel) {
+          const lab = r.label || '其他';
+          const cls = (r.labeled || r.platform) ? 'platform' : 'other';
+          return `<tr><td>${i+1}</td><td class="path">${escapeHtml(String(r.name))}</td>`
+            + `<td><span class="tag ${cls}">${escapeHtml(lab)}</span></td>`
+            + `<td>${fmtNum(r.cnt)}</td><td>${r.percent}%</td></tr>`;
+        }
+        return `<tr><td>${i+1}</td><td class="path">${escapeHtml(String(r.name))}</td><td>${fmtNum(r.cnt)}</td><td>${r.percent}%</td></tr>`;
+      }).join('');
+      document.getElementById(elId).innerHTML = head + body + '</tbody></table>' || '<div class="muted">暂无数据</div>';
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    /** datetime-local -> yyyy-MM-dd HH:mm:ss */
+    function toApiTime(localValue) {
+      if (!localValue) return '';
+      const v = localValue.replace('T', ' ');
+      return v.length === 16 ? v + ':00' : v;
+    }
+
+    function buildStatsUrl() {
+      const params = new URLSearchParams();
+      params.set('limit', '30');
+      const start = toApiTime(document.getElementById('startTime').value);
+      const end = toApiTime(document.getElementById('endTime').value);
+      if (start) params.set('startTime', start);
+      if (end) params.set('endTime', end);
+      const ips = document.getElementById('ipFilter').value.trim();
+      if (ips) {
+        // 拆成多个 ips= 参数，也兼容逗号串
+        ips.split(/[,;\s]+/).filter(Boolean).forEach(ip => params.append('ips', ip));
+      }
+      return '/api/stats?' + params.toString();
+    }
+
+    function updateFilterHint() {
+      const start = toApiTime(document.getElementById('startTime').value);
+      const end = toApiTime(document.getElementById('endTime').value);
+      const ips = document.getElementById('ipFilter').value.trim();
+      const el = document.getElementById('filterHint');
+      const parts = [];
+      if (start || end) parts.push((start || '…') + ' ~ ' + (end || '…'));
+      if (ips) parts.push('IP=' + ips);
+      el.textContent = parts.length ? ('当前筛选：' + parts.join('；')) : '当前：全部时间';
+    }
+
+    async function loadStats() {
+      updateFilterHint();
+      const res = await fetch(buildStatsUrl());
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || ('HTTP ' + res.status));
+      }
+      const data = await res.json();
+      renderCards(data.overview || {});
+      doughnut('chartStatus', data.byStatus || []);
+      doughnut('chartOwner', data.byIpOwner || []);
+      doughnut('chartMethod', data.byMethod || []);
+      line('chartDay', data.byDay || []);
+      const hours = (data.byHour || []);
+      line('chartHour', hours.slice(Math.max(0, hours.length - 72)));
+      table('tablePaths', data.topPaths || [], false);
+      table('tableIps', data.topIps || [], true);
+      table('tableUa', data.topUserAgents || [], false);
+      table('tableUp', data.topUpstreams || [], false);
+    }
+
+    function setBusy(busy) {
+      document.getElementById('btnUpload').disabled = busy;
+      document.getElementById('btnImport').disabled = busy;
+      document.getElementById('btnClearData').disabled = busy;
+    }
+
+    async function pollProgress() {
+      const res = await fetch('/api/import/progress');
+      const p = await res.json();
+      const box = document.getElementById('progressBox');
+      box.classList.add('show');
+      const pct = Number(p.percent || 0).toFixed(1);
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('progressText').textContent =
+        (p.running ? '导入中' : (p.message || '完成'))
+        + ` · inserted=${fmtNum(p.inserted)} skipped=${fmtNum(p.skipped)} · ${pct}%`
+        + (p.error ? (' · error=' + p.error) : '');
+      if (p.running) {
+        setBusy(true);
+      } else {
+        setBusy(false);
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (p.inserted > 0) loadStats().catch(console.error);
+      }
+    }
+
+    function startProgressPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(() => pollProgress().catch(console.error), 1500);
+      pollProgress();
+    }
+
+    document.getElementById('btnUpload').onclick = async () => {
+      const input = document.getElementById('fileUpload');
+      if (!input.files || !input.files[0]) {
+        alert('请先选择本地日志文件');
+        return;
+      }
+      const file = input.files[0];
+      const truncate = document.getElementById('chkTruncate').checked;
+      if (!confirm('确认上传并分析？\n文件：' + file.name + '（' + fmtBytes(file.size) + '）'
+          + (truncate ? '\n将先清空库内旧数据。' : '\n将追加到现有数据。'))) {
+        return;
+      }
+      const form = new FormData();
+      form.append('file', file);
+      form.append('truncate', truncate ? 'true' : 'false');
+      setBusy(true);
+      document.getElementById('progressBox').classList.add('show');
+      document.getElementById('progressText').textContent = '正在上传 ' + file.name + ' …';
+      try {
+        const res = await fetch('/api/import/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.message || '上传失败');
+          setBusy(false);
+          return;
+        }
+        startProgressPolling();
+      } catch (e) {
+        alert(e.message || e);
+        setBusy(false);
+      }
+    };
+
+    document.getElementById('btnImport').onclick = async () => {
+      const filePath = document.getElementById('filePath').value.trim();
+      const truncate = document.getElementById('chkTruncate').checked;
+      const body = { truncate: truncate };
+      if (filePath) body.filePath = filePath;
+      else if (!confirm('未填路径，将使用服务端默认配置文件导入，是否继续？')) return;
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || '导入失败');
+        return;
+      }
+      startProgressPolling();
+    };
+
+    document.getElementById('btnClearData').onclick = async () => {
+      if (!confirm('确认一键清空库内全部分析数据？此操作不可恢复。')) return;
+      try {
+        const res = await fetch('/api/clear', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.message || '清空失败');
+          return;
+        }
+        alert(data.message || '已清空');
+        loadStats().catch(console.error);
+      } catch (e) {
+        alert(e.message || e);
+      }
+    };
+
+    function readDbForm() {
+      return {
+        host: document.getElementById('dbHost').value.trim(),
+        port: Number(document.getElementById('dbPort').value.trim() || 3306),
+        database: document.getElementById('dbName').value.trim(),
+        username: document.getElementById('dbUser').value.trim(),
+        password: document.getElementById('dbPass').value
+      };
+    }
+
+    async function loadDbConfig() {
+      const res = await fetch('/api/db/config');
+      const data = await res.json();
+      const s = data.settings || {};
+      document.getElementById('dbHost').value = s.host || '';
+      document.getElementById('dbPort').value = s.port || 3306;
+      document.getElementById('dbName').value = s.database || '';
+      document.getElementById('dbUser').value = s.username || '';
+      document.getElementById('dbPass').value = '';
+      document.getElementById('dbPass').placeholder = data.passwordSet ? '已设置（留空保持不变）' : '请输入密码';
+      document.getElementById('dbHint').textContent =
+        '当前：' + (data.jdbcUrl || '-') + (data.hasSavedFile ? '（已保存本地配置）' : '（默认 application.yml）');
+    }
+
+    function openDbModal() {
+      const modal = document.getElementById('dbModal');
+      modal.classList.add('open');
+      loadDbConfig().catch(console.error);
+    }
+    function closeDbModal() {
+      document.getElementById('dbModal').classList.remove('open');
+    }
+    document.getElementById('btnOpenDbSettings').onclick = openDbModal;
+    document.getElementById('btnCloseDbSettings').onclick = closeDbModal;
+    document.getElementById('dbModal').addEventListener('click', (e) => {
+      if (e.target.id === 'dbModal') closeDbModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeDbModal();
+    });
+
+    document.getElementById('btnDbTest').onclick = async () => {
+      try {
+        const res = await fetch('/api/db/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(readDbForm())
+        });
+        const data = await res.json();
+        alert((data.ok ? '成功：' : '失败：') + (data.message || '') + (data.costMs != null ? '（' + data.costMs + 'ms）' : ''));
+      } catch (e) {
+        alert(e.message || e);
+      }
+    };
+
+    document.getElementById('btnDbApply').onclick = async () => {
+      if (!confirm('确认切换 MySQL？切换后统计/导入将使用新库（导入进行中不可切换）。')) return;
+      try {
+        const res = await fetch('/api/db/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(readDbForm())
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) {
+          alert(data.message || '切换失败');
+          return;
+        }
+        alert(data.message || '已切换');
+        document.getElementById('dbPass').value = '';
+        await loadDbConfig();
+        await loadStats();
+        closeDbModal();
+      } catch (e) {
+        alert(e.message || e);
+      }
+    };
+
+    document.getElementById('btnRefresh').onclick = () => loadStats().catch(e => alert(e.message || e));
+    document.getElementById('btnFilter').onclick = () => loadStats().catch(e => alert(e.message || e));
+    document.getElementById('btnClearFilter').onclick = () => {
+      document.getElementById('startTime').value = '';
+      document.getElementById('endTime').value = '';
+      document.getElementById('ipFilter').value = '';
+      loadStats().catch(e => alert(e.message || e));
+    };
+
+    /** 默认最近一周（本地时间） */
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function toLocalInput(d) {
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+        + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+    (function applyDefaultWeek() {
+      const end = new Date();
+      const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+      document.getElementById('startTime').value = toLocalInput(start);
+      document.getElementById('endTime').value = toLocalInput(end);
+    })();
+
+    loadStats().catch(() => {});
+    pollProgress().catch(() => {});
+    // MySQL 配置改为点设置图标时再加载
+  </script>
+</body>
+</html>
