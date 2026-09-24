@@ -35,7 +35,7 @@ If your format differs, adjust `NginxAccessLogParser` or open an issue with a re
 
 ### Web dashboard
 
-Dark single-page UI (Chart.js)—no separate frontend build:
+Dark single-page UI (Chart.js bundled locally—no external CDN)—no separate frontend build:
 
 - **Overview cards**: total requests, labeled IP share, 2xx / 4xx / 5xx rates
 - **Status code** and **HTTP method** share (doughnut charts)
@@ -43,6 +43,16 @@ Dark single-page UI (Chart.js)—no separate frontend build:
 - **Traffic by day / hour** (line charts)
 - **Top path / client IP / User-Agent / Upstream** tables
 - **Filters**: time range + multiple IPs (comma/space); default last 7 days
+
+#### Screenshots
+
+Synthetic demo data (`docs/examples/sample-access.log`, 3,200 lines) with IP role labels:
+
+![Dashboard overview](docs/screenshots/dashboard-overview.png)
+
+Charts / Top paths (same demo import):
+
+![Dashboard charts](docs/screenshots/dashboard-charts.png)
 
 ### MySQL & ops
 
@@ -53,11 +63,27 @@ Dark single-page UI (Chart.js)—no separate frontend build:
 
 ### Optional IP labels
 
-Configure CIDR / prefix / ranges in `application.yml`. The dashboard shows labeled-segment share and ownership on Top IPs (office, IDC, business nets, etc.).
+Map source IPs to system roles in `application.yml` (or copy from [`docs/examples/ip-labels.yml`](docs/examples/ip-labels.yml)). The dashboard then shows labeled-segment share and ownership on Top IPs.
+
+Example roles: `biz-workers`, `middleware`, `elasticsearch`, `edge-nginx`, `minio`, `gpu-workers`.
+
+```yaml
+nginx-log:
+  ip-labels:
+    - label: biz-workers
+      ranges:
+        - 10.170.24.125-10.170.24.136
+    - label: gpu-workers
+      ranges:
+        - 10.170.68.61-10.170.68.65
+```
+
+Supported range styles: exact IP, prefix (`10.0.0.`), interval (`a.b.c.d-a.b.c.e`).
 
 ### Other
 
 - Java 8+ / Spring Boot, runnable as a single jar
+- **Windows quick download**: [`dist/nginx-log-analyzer-windows.zip`](dist/nginx-log-analyzer-windows.zip) (jar + `start.bat`)—unzip and run
 - REST API for import, progress, stats, and DB config (script-friendly)
 - Unit tests for parser and IP labels; GitHub Actions runs `mvn test`
 
@@ -68,6 +94,15 @@ Configure CIDR / prefix / ranges in `application.yml`. The dashboard shows label
 - Maven 3.6+ (only when building from source)
 
 ## Quick start
+
+### 0. Windows quick download (recommended, no build)
+
+1. Download [`dist/nginx-log-analyzer-windows.zip`](dist/nginx-log-analyzer-windows.zip)
+2. Unzip anywhere (contains `nginx-log-analyzer.jar` and `start.bat`)
+3. With **Java 8+** and **MySQL** installed, double-click `start.bat`
+4. Browser opens http://127.0.0.1:8099/ — set the DB connection via the gear icon
+
+No Maven or source build required.
 
 ### 1. Prepare MySQL
 
@@ -97,6 +132,14 @@ java -jar target/nginx-log-analyzer-0.1.0-SNAPSHOT.jar
 ```
 
 ## Import logs
+
+**Demo sample:** `docs/examples/sample-access.log` (synthetic). Import via the UI upload, or:
+
+```bash
+curl -X POST http://127.0.0.1:8099/api/import \
+  -H 'Content-Type: application/json' \
+  -d '{"filePath":"'$(pwd)'/docs/examples/sample-access.log","truncate":true}'
+```
 
 **Upload (recommended):** choose a file on the page → optionally truncate → **Upload & analyze**.
 
@@ -130,15 +173,29 @@ If your format differs, adjust `NginxAccessLogParser` or open an issue with a sa
 
 ## IP labels (optional)
 
-In `application.yml`:
+Map source IPs to system roles. Copy [`docs/examples/ip-labels.yml`](docs/examples/ip-labels.yml) into `application.yml`, or set:
 
 ```yaml
 nginx-log:
   ip-labels:
-    - label: office
+    - label: biz-workers
       ranges:
-        - 10.0.0.0-10.0.0.255
-        - 192.168.1.
+        - 10.170.24.125-10.170.24.136
+    - label: middleware
+      ranges:
+        - 10.170.24.137-10.170.24.139
+    - label: elasticsearch
+      ranges:
+        - 10.170.24.140-10.170.24.142
+    - label: edge-nginx
+      ranges:
+        - 10.170.24.143-10.170.24.144
+    - label: minio
+      ranges:
+        - 10.170.24.145-10.170.24.146
+    - label: gpu-workers
+      ranges:
+        - 10.170.68.61-10.170.68.65
 ```
 
 Supported range styles: exact IP, prefix (`10.0.0.`), interval (`a.b.c.d-a.b.c.e`).
@@ -160,6 +217,7 @@ Supported range styles: exact IP, prefix (`10.0.0.`), interval (`a.b.c.d-a.b.c.e
 ## Project layout
 
 ```text
+dist/nginx-log-analyzer-windows.zip  Windows package (jar + start.bat)
 src/main/java/com/gwamcc/nginxlog/   Java sources
 src/main/resources/static/           Dashboard (index.html)
 src/main/resources/db/schema.sql     Table DDL
@@ -167,6 +225,10 @@ src/test/java/                       Unit tests
 .github/workflows/ci.yml             CI
 COMMERCIAL.md                        Commercial use & attribution
 README.zh-CN.md                      Chinese README
+docs/screenshots/                    Dashboard screenshots (demo data)
+docs/examples/sample-access.log      Synthetic access.log for demos
+docs/examples/ip-labels.yml          Sample IP → role mapping
+start.bat                            Windows launcher (same as in the zip)
 ```
 
 ## License & commercial use

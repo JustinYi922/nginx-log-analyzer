@@ -1,13 +1,16 @@
 package com.gwamcc.nginxlog.web;
 
+import com.gwamcc.nginxlog.config.NginxLogProperties;
 import com.gwamcc.nginxlog.model.DbConnectionSettings;
 import com.gwamcc.nginxlog.service.DbConfigService;
 import com.gwamcc.nginxlog.service.ImportProgress;
+import com.gwamcc.nginxlog.service.IpLabelService;
 import com.gwamcc.nginxlog.service.NginxLogImportService;
 import com.gwamcc.nginxlog.service.NginxLogStatsService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,13 +31,16 @@ public class NginxLogApiController {
     private final NginxLogImportService importService;
     private final NginxLogStatsService statsService;
     private final DbConfigService dbConfigService;
+    private final IpLabelService ipLabelService;
 
     public NginxLogApiController(NginxLogImportService importService,
                                  NginxLogStatsService statsService,
-                                 DbConfigService dbConfigService) {
+                                 DbConfigService dbConfigService,
+                                 IpLabelService ipLabelService) {
         this.importService = importService;
         this.statsService = statsService;
         this.dbConfigService = dbConfigService;
+        this.ipLabelService = ipLabelService;
     }
 
     @PostMapping("/import")
@@ -122,6 +128,92 @@ public class NginxLogApiController {
             @RequestParam(required = false) List<String> ips,
             @RequestParam(required = false) String ip) {
         return statsService.overview(startTime, endTime, mergeIps(ips, ip));
+    }
+
+    @GetMapping("/ip-labels")
+    public Map<String, Object> ipLabels() {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("rules", ipLabelService.listRules());
+        out.put("labels", ipLabelService.listKnownLabels());
+        out.put("source", ipLabelService.getSource());
+        out.put("configFile", ipLabelService.getConfigFile());
+        out.put("hasSavedFile", ipLabelService.hasSavedFile());
+        return out;
+    }
+
+    @PutMapping("/ip-labels")
+    public Map<String, Object> replaceIpLabels(@RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rawRules = body == null ? null : (List<Map<String, Object>>) body.get("rules");
+        List<NginxLogProperties.IpLabelRule> rules = toRules(rawRules);
+        List<NginxLogProperties.IpLabelRule> saved = ipLabelService.replaceRules(rules);
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("ok", true);
+        out.put("rules", saved);
+        out.put("labels", ipLabelService.listKnownLabels());
+        out.put("source", ipLabelService.getSource());
+        out.put("configFile", ipLabelService.getConfigFile());
+        out.put("message", "已保存 IP 标签规则");
+        return out;
+    }
+
+    @PostMapping("/ip-labels/assign")
+    public Map<String, Object> assignIpLabel(@RequestBody Map<String, Object> body) {
+        String ip = body == null ? null : str(body.get("ip"));
+        String label = body == null ? null : str(body.get("label"));
+        List<NginxLogProperties.IpLabelRule> saved = ipLabelService.assignIp(ip, label);
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("ok", true);
+        out.put("ip", ip == null ? null : ip.trim());
+        out.put("label", label == null ? null : label.trim());
+        out.put("resolvedLabel", ipLabelService.labelOf(ip));
+        out.put("rules", saved);
+        out.put("labels", ipLabelService.listKnownLabels());
+        out.put("source", ipLabelService.getSource());
+        out.put("message", "已更新 IP 归属");
+        return out;
+    }
+
+    @PostMapping("/ip-labels/preview")
+    public Map<String, Object> previewIpLabel(@RequestBody Map<String, Object> body) {
+        String ip = body == null ? null : str(body.get("ip"));
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("ip", ip);
+        out.put("label", ipLabelService.labelOf(ip));
+        return out;
+    }
+
+    private static List<NginxLogProperties.IpLabelRule> toRules(List<Map<String, Object>> rawRules) {
+        List<NginxLogProperties.IpLabelRule> rules = new java.util.ArrayList<NginxLogProperties.IpLabelRule>();
+        if (rawRules == null) {
+            return rules;
+        }
+        for (Map<String, Object> raw : rawRules) {
+            if (raw == null) {
+                continue;
+            }
+            NginxLogProperties.IpLabelRule rule = new NginxLogProperties.IpLabelRule();
+            rule.setLabel(str(raw.get("label")));
+            Object rangesObj = raw.get("ranges");
+            List<String> ranges = new java.util.ArrayList<String>();
+            if (rangesObj instanceof List) {
+                for (Object item : (List<?>) rangesObj) {
+                    if (item != null) {
+                        ranges.add(String.valueOf(item));
+                    }
+                }
+            } else if (rangesObj instanceof String) {
+                String text = ((String) rangesObj).replace("\r\n", "\n");
+                for (String line : text.split("\n")) {
+                    if (line != null && !line.trim().isEmpty()) {
+                        ranges.add(line.trim());
+                    }
+                }
+            }
+            rule.setRanges(ranges);
+            rules.add(rule);
+        }
+        return rules;
     }
 
     private static List<String> mergeIps(List<String> ips, String ip) {

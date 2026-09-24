@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Nginx 访问日志看板</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/vendor/chart.umd.min.js"></script>
   <style>
     :root {
       --bg: #0f1419;
@@ -42,7 +42,6 @@
       border-radius: 8px;
       padding: 8px 12px;
     }
-    input[type=text]#filePath { width: min(420px, 55vw); }
     input[type=text]#ipFilter { width: min(360px, 50vw); }
     input[type=datetime-local] { width: 210px; color-scheme: dark; }
     .filter-bar {
@@ -93,17 +92,52 @@
       margin: 10px 28px 0;
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 10px 14px;
       align-items: center;
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 10px 14px;
+      padding: 8px 14px;
     }
     .upload-bar label { color: var(--muted); font-size: 13px; }
     input[type=file] {
       color: var(--muted);
-      max-width: min(420px, 60vw);
+      max-width: min(280px, 40vw);
+    }
+    .progress {
+      display: none;
+      flex: 1 1 220px;
+      min-width: 180px;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    .progress.show { display: flex; }
+    .progress #progressText {
+      flex: 0 1 auto;
+      max-width: 42%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .bar {
+      flex: 1 1 120px;
+      height: 8px;
+      background: #243044;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 0;
+      min-width: 80px;
+    }
+    .bar > i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), #69b1ff);
     }
     .modal-mask {
       display: none;
@@ -197,28 +231,6 @@
       min-height: 320px;
     }
     .panel h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
-    .progress {
-      margin: 10px 28px 0;
-      background: #121821;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 14px;
-      display: none;
-    }
-    .progress.show { display: block; }
-    .bar {
-      height: 8px;
-      background: #243044;
-      border-radius: 999px;
-      overflow: hidden;
-      margin-top: 8px;
-    }
-    .bar > i {
-      display: block;
-      height: 100%;
-      width: 0;
-      background: linear-gradient(90deg, var(--accent), #69b1ff);
-    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -242,18 +254,85 @@
     }
     .tag.platform { background: rgba(61,214,140,.18); color: var(--ok); }
     .tag.other { background: rgba(154,167,184,.15); color: var(--muted); }
+    .modal.wide { width: min(760px, 100%); }
+    .modal.compact { width: min(420px, 100%); }
+    .ip-rule-list { max-height: 420px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+    .ip-rule-row {
+      display: grid;
+      grid-template-columns: 160px 1fr auto;
+      gap: 8px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #121821;
+    }
+    .ip-rule-row input, .ip-rule-row textarea,
+    .assign-form input {
+      width: 100%;
+      background: #0d1118;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    .ip-rule-row textarea { min-height: 72px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .ip-rule-row .del-btn { margin-top: 22px; }
+    .ip-hint { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+    .ip-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+    }
+    .ip-cell .ip-text { word-break: break-all; }
+    .ip-edit-btn {
+      opacity: 0;
+      visibility: hidden;
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 2px 4px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity .12s ease, background .12s ease, color .12s ease;
+    }
+    tr:hover .ip-edit-btn,
+    .ip-cell:hover .ip-edit-btn,
+    .ip-edit-btn:focus {
+      opacity: 1;
+      visibility: visible;
+    }
+    .ip-edit-btn:hover {
+      background: #243044;
+      color: var(--accent);
+    }
+    .assign-form label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    #ipLabelHint { color: var(--muted); font-size: 12px; word-break: break-all; }
   </style>
 </head>
 <body>
   <header>
     <div>
       <h1>Nginx 访问日志看板</h1>
-      <div class="sub">Spring Boot + MySQL · 支持本地上传日志分析</div>
-      <div class="sub" style="margin-top:4px">Author: <a href="https://github.com/JustinYi922/nginx-log-analyzer" style="color:var(--accent)">JustinYi922</a> · 635344900@qq.com · MIT（商用请保留署名并邮件告知）</div>
+      <div class="sub">上传或导入 access.log，查看状态码 / 方法 / 路径 / IP / UA / Upstream 占比与按天、按小时趋势</div>
     </div>
     <div class="actions">
       <button id="btnRefresh" class="secondary">刷新统计</button>
       <button id="btnClearData" class="danger">一键清空数据</button>
+      <button id="btnOpenIpLabels" class="secondary" title="IP → 系统标记">IP 标签</button>
       <button id="btnOpenDbSettings" class="icon-btn" title="MySQL 设置" aria-label="MySQL 设置">⚙</button>
     </div>
   </header>
@@ -263,9 +342,10 @@
     <input id="fileUpload" type="file" accept=".log,.txt,text/plain,*/*" />
     <label class="chk"><input id="chkTruncate" type="checkbox" checked /> 导入前先清空旧数据</label>
     <button id="btnUpload">上传并分析</button>
-    <span class="muted">也可填绝对路径：</span>
-    <input id="filePath" type="text" placeholder="可选：服务器本地绝对路径" />
-    <button id="btnImport" class="secondary">按路径导入</button>
+    <div id="progressBox" class="progress" title="导入进度">
+      <div id="progressText" class="muted">待命</div>
+      <div class="bar"><i id="progressBar"></i></div>
+    </div>
   </div>
 
   <div id="dbModal" class="modal-mask" role="dialog" aria-modal="true" aria-labelledby="dbModalTitle">
@@ -289,9 +369,38 @@
     </div>
   </div>
 
-  <div id="progressBox" class="progress">
-    <div id="progressText" class="muted">待命</div>
-    <div class="bar"><i id="progressBar"></i></div>
+  <div id="ipLabelModal" class="modal-mask" role="dialog" aria-modal="true" aria-labelledby="ipLabelModalTitle">
+    <div class="modal wide">
+      <div class="modal-head">
+        <h3 id="ipLabelModalTitle">IP → 系统标记</h3>
+        <button type="button" id="btnCloseIpLabels" class="modal-close" title="关闭">×</button>
+      </div>
+      <p class="ip-hint">每条规则：系统名 + 网段列表（每行一条）。支持精确 IP、前缀（如 <code>10.0.1.</code>）、区间（如 <code>10.0.1.10-10.0.1.20</code>）。首次为空，保存后写入本机配置并立即作用于「来源归属」统计。</p>
+      <div id="ipRuleList" class="ip-rule-list"></div>
+      <div class="db-actions">
+        <button type="button" id="btnAddIpRule" class="secondary">新增系统</button>
+        <button type="button" id="btnSaveIpLabels">保存规则</button>
+        <span id="ipLabelHint"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="ipAssignModal" class="modal-mask" role="dialog" aria-modal="true" aria-labelledby="ipAssignModalTitle">
+    <div class="modal compact">
+      <div class="modal-head">
+        <h3 id="ipAssignModalTitle">设置所属系统</h3>
+        <button type="button" id="btnCloseIpAssign" class="modal-close" title="关闭">×</button>
+      </div>
+      <div class="assign-form">
+        <label>来源 IP<input id="assignIpValue" type="text" readonly /></label>
+        <label>所属系统<input id="assignIpLabel" type="text" list="knownLabels" placeholder="输入或选择系统名" /></label>
+      </div>
+      <datalist id="knownLabels"></datalist>
+      <div class="db-actions">
+        <button type="button" id="btnSaveIpAssign">保存</button>
+        <span id="assignHint" class="muted" style="font-size:12px"></span>
+      </div>
+    </div>
   </div>
 
   <div class="filter-bar">
@@ -324,6 +433,7 @@
   <script>
     const charts = {};
     let pollTimer = null;
+    let knownLabels = [];
 
     function fmtNum(n) {
       if (n == null) return '-';
@@ -400,25 +510,49 @@
       document.getElementById(id).parentElement.style.height = '340px';
     }
 
-    function table(elId, rows, withIpLabel) {
-      const head = withIpLabel
-        ? '<table><thead><tr><th>#</th><th>值</th><th>归属</th><th>次数</th><th>占比</th></tr></thead><tbody>'
-        : '<table><thead><tr><th>#</th><th>值</th><th>次数</th><th>占比</th></tr></thead><tbody>';
+    function table(elId, rows) {
+      const head = '<table><thead><tr><th>#</th><th>值</th><th>次数</th><th>占比</th></tr></thead><tbody>';
+      const body = rows.map((r, i) =>
+        `<tr><td>${i+1}</td><td class="path">${escapeHtml(String(r.name))}</td><td>${fmtNum(r.cnt)}</td><td>${r.percent}%</td></tr>`
+      ).join('');
+      document.getElementById(elId).innerHTML = rows.length
+        ? head + body + '</tbody></table>'
+        : '<div class="muted">暂无数据</div>';
+    }
+
+    function renderIpTable(rows) {
+      if (!rows.length) {
+        document.getElementById('tableIps').innerHTML = '<div class="muted">暂无数据</div>';
+        return;
+      }
+      const head = '<table><thead><tr><th>#</th><th>IP</th><th>归属</th><th>次数</th><th>占比</th></tr></thead><tbody>';
       const body = rows.map((r, i) => {
-        if (withIpLabel) {
-          const lab = r.label || '其他';
-          const cls = (r.labeled || r.platform) ? 'platform' : 'other';
-          return `<tr><td>${i+1}</td><td class="path">${escapeHtml(String(r.name))}</td>`
-            + `<td><span class="tag ${cls}">${escapeHtml(lab)}</span></td>`
-            + `<td>${fmtNum(r.cnt)}</td><td>${r.percent}%</td></tr>`;
-        }
-        return `<tr><td>${i+1}</td><td class="path">${escapeHtml(String(r.name))}</td><td>${fmtNum(r.cnt)}</td><td>${r.percent}%</td></tr>`;
+        const ip = String(r.name);
+        const lab = r.label || '其他';
+        const cls = (r.labeled || r.platform) ? 'platform' : 'other';
+        return `<tr data-ip="${escapeHtml(ip)}" data-label="${escapeHtml(lab)}">`
+          + `<td>${i+1}</td>`
+          + `<td class="path"><span class="ip-cell">`
+          + `<span class="ip-text">${escapeHtml(ip)}</span>`
+          + `<button type="button" class="ip-edit-btn" title="设置所属系统" aria-label="设置所属系统">✎</button>`
+          + `</span></td>`
+          + `<td><span class="tag ${cls}">${escapeHtml(lab)}</span></td>`
+          + `<td>${fmtNum(r.cnt)}</td><td>${r.percent}%</td>`
+          + `</tr>`;
       }).join('');
-      document.getElementById(elId).innerHTML = head + body + '</tbody></table>' || '<div class="muted">暂无数据</div>';
+      document.getElementById('tableIps').innerHTML = head + body + '</tbody></table>';
+    }
+
+    function updateKnownLabels(labels) {
+      knownLabels = Array.isArray(labels) ? labels.slice() : [];
+      const dl = document.getElementById('knownLabels');
+      if (dl) {
+        dl.innerHTML = knownLabels.map(l => `<option value="${escapeHtml(l)}"></option>`).join('');
+      }
     }
 
     function escapeHtml(s) {
-      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
     /** datetime-local -> yyyy-MM-dd HH:mm:ss */
@@ -437,7 +571,6 @@
       if (end) params.set('endTime', end);
       const ips = document.getElementById('ipFilter').value.trim();
       if (ips) {
-        // 拆成多个 ips= 参数，也兼容逗号串
         ips.split(/[,;\s]+/).filter(Boolean).forEach(ip => params.append('ips', ip));
       }
       return '/api/stats?' + params.toString();
@@ -469,15 +602,167 @@
       line('chartDay', data.byDay || []);
       const hours = (data.byHour || []);
       line('chartHour', hours.slice(Math.max(0, hours.length - 72)));
-      table('tablePaths', data.topPaths || [], false);
-      table('tableIps', data.topIps || [], true);
-      table('tableUa', data.topUserAgents || [], false);
-      table('tableUp', data.topUpstreams || [], false);
+      table('tablePaths', data.topPaths || []);
+      renderIpTable(data.topIps || []);
+      table('tableUa', data.topUserAgents || []);
+      table('tableUp', data.topUpstreams || []);
     }
+
+    async function assignIp(ip, label) {
+      const res = await fetch('/api/ip-labels/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip, label })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.message || '更新归属失败');
+      }
+      if (data.labels) updateKnownLabels(data.labels);
+      return data;
+    }
+
+    function openIpAssignModal(ip, currentLabel) {
+      document.getElementById('assignIpValue').value = ip || '';
+      document.getElementById('assignIpLabel').value =
+        (currentLabel && currentLabel !== '其他') ? currentLabel : '';
+      document.getElementById('assignHint').textContent = '';
+      document.getElementById('ipAssignModal').classList.add('open');
+      setTimeout(() => document.getElementById('assignIpLabel').focus(), 50);
+    }
+    function closeIpAssignModal() {
+      document.getElementById('ipAssignModal').classList.remove('open');
+    }
+
+    document.getElementById('tableIps').addEventListener('click', (e) => {
+      const btn = e.target.closest('.ip-edit-btn');
+      if (!btn) return;
+      e.preventDefault();
+      const tr = btn.closest('tr');
+      const ip = tr && tr.getAttribute('data-ip');
+      const label = tr && tr.getAttribute('data-label');
+      if (!ip) return;
+      openIpAssignModal(ip, label);
+    });
+
+    document.getElementById('btnCloseIpAssign').onclick = closeIpAssignModal;
+    document.getElementById('ipAssignModal').addEventListener('click', (e) => {
+      if (e.target.id === 'ipAssignModal') closeIpAssignModal();
+    });
+    document.getElementById('btnSaveIpAssign').onclick = async () => {
+      const ip = document.getElementById('assignIpValue').value.trim();
+      const label = document.getElementById('assignIpLabel').value.trim();
+      if (!ip) return;
+      if (!label) {
+        alert('请填写所属系统名');
+        return;
+      }
+      const btn = document.getElementById('btnSaveIpAssign');
+      btn.disabled = true;
+      try {
+        await assignIp(ip, label);
+        document.getElementById('assignHint').textContent = '已保存';
+        closeIpAssignModal();
+        await loadStats();
+      } catch (err) {
+        alert(err.message || err);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    function renderIpRuleEditor(rules) {
+      const list = document.getElementById('ipRuleList');
+      if (!rules || !rules.length) {
+        list.innerHTML = '<div class="muted">暂无规则，点击「新增系统」开始配置</div>';
+        return;
+      }
+      list.innerHTML = rules.map((rule, idx) => {
+        const ranges = (rule.ranges || []).join('\n');
+        return `<div class="ip-rule-row" data-idx="${idx}">`
+          + `<div><div class="muted" style="font-size:12px;margin-bottom:4px">系统名</div>`
+          + `<input class="rule-label" type="text" value="${escapeHtml(rule.label || '')}" placeholder="如 office / app-a" /></div>`
+          + `<div><div class="muted" style="font-size:12px;margin-bottom:4px">网段（每行一条）</div>`
+          + `<textarea class="rule-ranges" placeholder="10.0.1.10&#10;10.0.1.20-10.0.1.30">${escapeHtml(ranges)}</textarea></div>`
+          + `<button type="button" class="danger del-btn btn-del-rule">删除</button>`
+          + `</div>`;
+      }).join('');
+    }
+
+    function readIpRulesFromEditor() {
+      return Array.from(document.querySelectorAll('#ipRuleList .ip-rule-row')).map(row => {
+        const label = row.querySelector('.rule-label').value.trim();
+        const ranges = row.querySelector('.rule-ranges').value
+          .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        return { label, ranges };
+      });
+    }
+
+    async function loadIpLabelsIntoModal() {
+      const res = await fetch('/api/ip-labels');
+      const data = await res.json();
+      updateKnownLabels(data.labels || []);
+      renderIpRuleEditor(data.rules || []);
+      document.getElementById('ipLabelHint').textContent =
+        '来源：' + (data.source === 'file' ? '本地 JSON' : 'application.yml')
+        + ' · ' + (data.configFile || '')
+        + (data.hasSavedFile ? '' : '（尚未保存过，保存后将写入本地文件）');
+    }
+
+    function openIpLabelModal() {
+      document.getElementById('ipLabelModal').classList.add('open');
+      loadIpLabelsIntoModal().catch(e => alert(e.message || e));
+    }
+    function closeIpLabelModal() {
+      document.getElementById('ipLabelModal').classList.remove('open');
+    }
+
+    document.getElementById('btnOpenIpLabels').onclick = openIpLabelModal;
+    document.getElementById('btnCloseIpLabels').onclick = closeIpLabelModal;
+    document.getElementById('ipLabelModal').addEventListener('click', (e) => {
+      if (e.target.id === 'ipLabelModal') closeIpLabelModal();
+    });
+    document.getElementById('btnAddIpRule').onclick = () => {
+      const rules = readIpRulesFromEditor();
+      rules.push({ label: '', ranges: [] });
+      renderIpRuleEditor(rules);
+    };
+    document.getElementById('ipRuleList').addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-del-rule');
+      if (!btn) return;
+      const row = btn.closest('.ip-rule-row');
+      if (row) row.remove();
+      if (!document.querySelectorAll('#ipRuleList .ip-rule-row').length) {
+        document.getElementById('ipRuleList').innerHTML =
+          '<div class="muted">暂无规则，点击「新增系统」开始配置</div>';
+      }
+    });
+    document.getElementById('btnSaveIpLabels').onclick = async () => {
+      const rules = readIpRulesFromEditor().filter(r => r.label || (r.ranges && r.ranges.length));
+      try {
+        const res = await fetch('/api/ip-labels', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rules })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          alert(data.message || '保存失败');
+          return;
+        }
+        updateKnownLabels(data.labels || []);
+        renderIpRuleEditor(data.rules || []);
+        document.getElementById('ipLabelHint').textContent =
+          '已保存到 ' + (data.configFile || '') + ' · 来源：本地 JSON';
+        await loadStats();
+        alert(data.message || '已保存');
+      } catch (e) {
+        alert(e.message || e);
+      }
+    };
 
     function setBusy(busy) {
       document.getElementById('btnUpload').disabled = busy;
-      document.getElementById('btnImport').disabled = busy;
       document.getElementById('btnClearData').disabled = busy;
     }
 
@@ -540,25 +825,6 @@
       }
     };
 
-    document.getElementById('btnImport').onclick = async () => {
-      const filePath = document.getElementById('filePath').value.trim();
-      const truncate = document.getElementById('chkTruncate').checked;
-      const body = { truncate: truncate };
-      if (filePath) body.filePath = filePath;
-      else if (!confirm('未填路径，将使用服务端默认配置文件导入，是否继续？')) return;
-      const res = await fetch('/api/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.message || '导入失败');
-        return;
-      }
-      startProgressPolling();
-    };
-
     document.getElementById('btnClearData').onclick = async () => {
       if (!confirm('确认一键清空库内全部分析数据？此操作不可恢复。')) return;
       try {
@@ -613,7 +879,11 @@
       if (e.target.id === 'dbModal') closeDbModal();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeDbModal();
+      if (e.key === 'Escape') {
+        closeDbModal();
+        closeIpLabelModal();
+        closeIpAssignModal();
+      }
     });
 
     document.getElementById('btnDbTest').onclick = async () => {
@@ -677,7 +947,7 @@
 
     loadStats().catch(() => {});
     pollProgress().catch(() => {});
-    // MySQL 配置改为点设置图标时再加载
+    fetch('/api/ip-labels').then(r => r.json()).then(d => updateKnownLabels(d.labels || [])).catch(() => {});
   </script>
 </body>
 </html>

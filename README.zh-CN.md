@@ -35,7 +35,7 @@
 
 ### Web 看板
 
-深色单页看板（Chart.js），打开即可用，无需单独前端工程：
+深色单页看板（Chart.js 已内置，内网无需外网 CDN），打开即可用，无需单独前端工程：
 
 - **概览卡片**：总请求量、已标记网段占比、2xx / 4xx / 5xx 占比
 - **状态码占比**、**HTTP 方法占比**（饼图）
@@ -43,6 +43,16 @@
 - **按天 / 按小时访问量**（折线）
 - **Top 路径 / 来源 IP / User-Agent / Upstream** 排行表
 - **筛选**：时间范围 + 多 IP（逗号/空格分隔）；默认最近一周
+
+#### 界面示例
+
+演示数据（`docs/examples/sample-access.log`，3200 行）+ IP 角色标签：
+
+![看板总览](docs/screenshots/dashboard-overview.png)
+
+图表与 Top 路径：
+
+![看板图表](docs/screenshots/dashboard-charts.png)
 
 ### MySQL 与运维
 
@@ -53,11 +63,37 @@
 
 ### IP 网段标签（可选）
 
-在 `application.yml` 配置 CIDR / 前缀 / 区间，看板中展示「已标记网段」与 Top IP 归属，便于区分办公网、机房、业务网段等。
+按来源 IP 映射到系统角色，配置见 [`docs/examples/ip-labels.yml`](docs/examples/ip-labels.yml)，或写入 `application.yml`：
+
+```yaml
+nginx-log:
+  ip-labels:
+    - label: biz-workers
+      ranges:
+        - 10.170.24.125-10.170.24.136
+    - label: middleware
+      ranges:
+        - 10.170.24.137-10.170.24.139
+    - label: elasticsearch
+      ranges:
+        - 10.170.24.140-10.170.24.142
+    - label: edge-nginx
+      ranges:
+        - 10.170.24.143-10.170.24.144
+    - label: minio
+      ranges:
+        - 10.170.24.145-10.170.24.146
+    - label: gpu-workers
+      ranges:
+        - 10.170.68.61-10.170.68.65
+```
+
+支持：精确 IP、前缀（`10.0.0.`）、区间（`a.b.c.d-a.b.c.e`）。
 
 ### 其它
 
 - Java 8+ / Spring Boot，单 jar 可跑
+- **Windows 快捷下载**：仓库 [`dist/nginx-log-analyzer-windows.zip`](dist/nginx-log-analyzer-windows.zip)（含 jar + `start.bat`），解压即用
 - 提供 REST API（导入、进度、统计、库配置），可脚本化接入
 - 单元测试覆盖解析与 IP 标签逻辑；GitHub Actions CI 跑 `mvn test`
 
@@ -68,6 +104,15 @@
 - Maven 3.6+（仅从源码构建时需要）
 
 ## 快速开始
+
+### 0. Windows 快捷下载（推荐，免编译）
+
+1. 下载 [`dist/nginx-log-analyzer-windows.zip`](dist/nginx-log-analyzer-windows.zip)
+2. 解压到任意目录（内含 `nginx-log-analyzer.jar` 与 `start.bat`）
+3. 本机已安装 **Java 8+** 与 **MySQL** 后，双击 `start.bat`
+4. 浏览器会打开 http://127.0.0.1:8099/ ，在页面齿轮里配置数据库即可
+
+无需安装 Maven，也无需从源码打包。
 
 ### 1. 准备 MySQL
 
@@ -97,6 +142,14 @@ java -jar target/nginx-log-analyzer-0.1.0-SNAPSHOT.jar
 ```
 
 ## 导入日志
+
+**演示样例：** `docs/examples/sample-access.log`（合成数据）。可在页面上传，或：
+
+```bash
+curl -X POST http://127.0.0.1:8099/api/import \
+  -H 'Content-Type: application/json' \
+  -d '{"filePath":"'$(pwd)'/docs/examples/sample-access.log","truncate":true}'
+```
 
 **上传（推荐）：** 页面选择文件 → 可选清空 → **Upload & analyze**。
 
@@ -130,18 +183,7 @@ $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent
 
 ## IP 标签（可选）
 
-在 `application.yml` 中：
-
-```yaml
-nginx-log:
-  ip-labels:
-    - label: office
-      ranges:
-        - 10.0.0.0-10.0.0.255
-        - 192.168.1.
-```
-
-支持：精确 IP、前缀（`10.0.0.`）、区间（`a.b.c.d-a.b.c.e`）。
+见上文「IP 网段标签」与 [`docs/examples/ip-labels.yml`](docs/examples/ip-labels.yml)。
 
 ## API 一览
 
@@ -160,6 +202,7 @@ nginx-log:
 ## 目录结构
 
 ```text
+dist/nginx-log-analyzer-windows.zip  Windows 预打包（jar + start.bat）
 src/main/java/com/gwamcc/nginxlog/   Java 源码
 src/main/resources/static/           看板（index.html）
 src/main/resources/db/schema.sql     表结构
@@ -167,6 +210,8 @@ src/test/java/                       单元测试
 .github/workflows/ci.yml             CI
 COMMERCIAL.md                        商用与署名说明
 README.md                            英文 README（默认）
+docs/screenshots/                    看板截图示例
+start.bat                            Windows 启动脚本（与 zip 内同款）
 ```
 
 ## 协议与商用

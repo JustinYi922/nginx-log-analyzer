@@ -1,0 +1,38 @@
+# Sample IP → system labels for nginx-log-analyzer
+# Copy the `ip-labels` block into application.yml (or merge under nginx-log:).
+# Ranges below follow a typical private K8s / edge layout — replace with your inventory.
+
+nginx-log:
+  ip-labels:
+    # K8s business workers (app pods / ingress on first nodes)
+    - label: biz-workers
+      ranges:
+        - 10.170.24.125-10.170.24.136
+    # Redis / Nacos / MQ workers
+    - label: middleware
+      ranges:
+        - 10.170.24.137-10.170.24.139
+    # Elasticsearch workers
+    - label: elasticsearch
+      ranges:
+        - 10.170.24.140-10.170.24.142
+    # Edge / L7 nginx (non-K8s)
+    - label: edge-nginx
+      ranges:
+        - 10.170.24.143-10.170.24.144
+    # Object storage workers
+    - label: minio
+      ranges:
+        - 10.170.24.145-10.170.24.146
+    # GPU / inference workers
+    - label: gpu-workers
+      ranges:
+        - 10.170.68.61-10.170.68.65
+    # K8s control plane (optional)
+    - label: k8s-master
+      ranges:
+        - 10.170.24.121-10.170.24.123
+    # Installer / Harbor host (optional)
+    - label: harbor-installer
+      ranges:
+        - 10.170.24.124

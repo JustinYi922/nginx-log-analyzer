@@ -12,10 +12,10 @@ spring:
       max-request-size: 2048MB
       file-size-threshold: 10MB
   datasource:
-    # 也可在页面「MySQL 设置」中配置；保存后写入 ~/.nginx-log-analyzer/db.json
-    url: jdbc:mysql://127.0.0.1:3306/nginx_log?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    # 默认连接；也可在页面「MySQL 设置」中改，保存后写入 ~/.nginx-log-analyzer/db.json（会覆盖此处）
+    url: jdbc:mysql://localhost:3306/nginx_log?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
     username: root
-    password: root
+    password: 1234.com.CN
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
@@ -26,12 +26,7 @@ nginx-log:
   default-file:
   batch-size: 2000
   upload-dir: ${user.home}/.nginx-log-analyzer/uploads
-  # 可选：按来源 IP 网段打标签（展示「已标记网段」占比）。示例：
-  # ip-labels:
-  #   - label: office
-  #     ranges:
-  #       - 10.0.0.0-10.0.0.255
-  #       - 192.168.1.
+  # 默认无标签；由看板「IP 标签」或首页编辑写入 ~/.nginx-log-analyzer/ip-labels.json
   ip-labels: []
 
 logging:
